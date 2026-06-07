@@ -1,0 +1,91 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
+export default function UmkmDestinasiTable() {
+  const [businesses, setBusinesses] = useState([]);
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+
+    fetch("http://127.0.0.1:8000/api/destinasi", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+    })
+      .then((res) => res.json())
+      .then((data) => setBusinesses(data));
+  }, []);
+
+  return (
+    <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
+      <table className="min-w-full border-collapse text-left">
+        <thead className="bg-slate-50 text-xs uppercase tracking-[0.24em] text-slate-500">
+          <tr>
+            <th className="px-6 py-4">Nama Usaha</th>
+            <th className="px-6 py-4">Kategori</th>
+            <th className="px-6 py-4">Alamat</th>
+            <th className="px-6 py-4">Status</th>
+            <th className="px-6 py-4">Email</th>
+            <th className="px-6 py-4">Aksi</th>
+          </tr>
+        </thead>
+
+        <tbody className="divide-y divide-slate-200 text-sm text-slate-700">
+          {businesses.length > 0 ? (
+            businesses.map((business: any) => (
+              <tr
+                key={business.id}
+                className="hover:bg-slate-50"
+              >
+                <td className="px-6 py-5 font-medium text-slate-950">
+                  {business.nama}
+                </td>
+
+                <td className="px-6 py-5">
+                  {business.kategori}
+                </td>
+
+                <td className="px-6 py-5">
+                  {business.alamat}
+                </td>
+
+                <td className="px-6 py-5">
+                  <span className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                    Aktif
+                  </span>
+                </td>
+
+                <td className="px-6 py-5">
+                  {business.email}
+                </td>
+
+                <td className="px-6 py-5">
+                  <div className="flex gap-3">
+                    <button className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 py-2 text-slate-600 hover:border-emerald-300 hover:text-emerald-700">
+                      ✏️
+                    </button>
+
+                    <button className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 py-2 text-red-600 hover:border-red-300 hover:bg-red-50">
+                      🗑️
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td
+                colSpan={6}
+                className="px-6 py-10 text-center text-slate-500"
+              >
+                Belum ada data usaha
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
