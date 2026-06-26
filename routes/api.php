@@ -47,8 +47,13 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
+// Public routes for destinasi
+Route::get('/destinasi-public', [DestinasiController::class, 'getAllPublic']);
+Route::get('/destinasi-public/{id}', [DestinasiController::class, 'showPublic']);
+
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::get('/admin/dashboard', [DestinasiController::class, 'adminDashboard']);
 
     Route::apiResource('destinasi', DestinasiController::class);
 });

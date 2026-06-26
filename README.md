@@ -21,6 +21,22 @@ Laravel is a web application framework with expressive, elegant syntax. We belie
 
 Laravel is accessible, powerful, and provides tools required for large, robust applications.
 
+## Project notes
+
+- Run `php artisan storage:link` to expose uploaded images from `storage/app/public` to `public/storage`.
+
+- Database fix:
+
+If some rows have negative latitude but should be positive (Batam), run this SQL on your DB:
+
+```
+UPDATE destinasis
+SET latitude = ABS(latitude)
+WHERE latitude < 0 AND ST_Distance_Sphere(point(ABS(longitude), ABS(latitude)), point(104.7313, 1.1291)) < 100000;
+```
+
+Adjust the WHERE clause as needed; or manually inspect suspect rows.
+
 ## Learning Laravel
 
 Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.

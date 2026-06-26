@@ -37,12 +37,19 @@ async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     const data = await response.json();
 
     if (!response.ok) {
-      setError(data.message || "Login gagal");
+      const validationErrors = data.errors
+        ? Object.values(data.errors).flat().join(" ")
+        : data.message || "Login gagal";
+      setError(validationErrors);
       return;
     }
 
     localStorage.setItem("token", data.token);
-    router.push("/umkm");
+    if (data.user?.role === "admin") {
+      router.push("/admin");
+    } else {
+      router.push("/umkm");
+    }
   } catch {
     setError("Tidak bisa terhubung ke server Laravel");
   }

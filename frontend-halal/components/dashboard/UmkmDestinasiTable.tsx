@@ -2,6 +2,11 @@
 
 import { useEffect, useState } from "react";
 
+function getPhotoUrl(foto?: string | null) {
+  if (!foto) return null;
+  return foto.startsWith("http") ? foto : `http://127.0.0.1:8000/storage/${foto}`;
+}
+
 export default function UmkmDestinasiTable() {
   const [businesses, setBusinesses] = useState([]);
 
@@ -23,6 +28,7 @@ export default function UmkmDestinasiTable() {
       <table className="min-w-full border-collapse text-left">
         <thead className="bg-slate-50 text-xs uppercase tracking-[0.24em] text-slate-500">
           <tr>
+            <th className="px-6 py-4">Foto</th>
             <th className="px-6 py-4">Nama Usaha</th>
             <th className="px-6 py-4">Kategori</th>
             <th className="px-6 py-4">Alamat</th>
@@ -39,6 +45,20 @@ export default function UmkmDestinasiTable() {
                 key={business.id}
                 className="hover:bg-slate-50"
               >
+                <td className="px-6 py-5">
+                  {getPhotoUrl(business.foto) ? (
+                    <img
+                      src={getPhotoUrl(business.foto)}
+                      alt={business.nama}
+                      className="h-16 w-16 rounded-2xl object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-xs text-slate-500">
+                      No Foto
+                    </div>
+                  )}
+                </td>
+
                 <td className="px-6 py-5 font-medium text-slate-950">
                   {business.nama}
                 </td>
@@ -77,7 +97,7 @@ export default function UmkmDestinasiTable() {
           ) : (
             <tr>
               <td
-                colSpan={6}
+                colSpan={7}
                 className="px-6 py-10 text-center text-slate-500"
               >
                 Belum ada data usaha

@@ -1,11 +1,17 @@
-const stats = [
-  { label: "Total Destinasi", value: "275", description: "Destinasi halal aktif" },
-  { label: "UMKM Terdaftar", value: "102", description: "Pelaku usaha halal" },
-  { label: "Kategori", value: "12", description: "Jenis destinasi" },
-  { label: "Laporan Masuk", value: "24", description: "Permintaan validasi" },
+type StatItem = {
+  label: string;
+  value: string;
+  description: string;
+};
+
+const defaultStats: StatItem[] = [
+  { label: "Total Destinasi", value: "0", description: "Destinasi halal aktif" },
+  { label: "UMKM Terdaftar", value: "0", description: "Pelaku usaha halal" },
+  { label: "Kategori", value: "0", description: "Jenis destinasi" },
+  { label: "Laporan Masuk", value: "0", description: "Permintaan validasi" },
 ];
 
-export default function AdminStats() {
+export default function AdminStats({ stats = defaultStats }: { stats?: StatItem[] }) {
   return (
     <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       {stats.map((item) => (
