@@ -6,7 +6,9 @@ import { useEffect, useState } from "react";
 const items = [
   { label: "Dashboard", href: "/umkm" },
   { label: "Kelola Data", href: "/umkm/destinasi" },
+  { label: "Profil", href: "/umkm/profil" },
 ];
+
 
 export default function UmkmSidebar() {
   const [user, setUser] = useState({

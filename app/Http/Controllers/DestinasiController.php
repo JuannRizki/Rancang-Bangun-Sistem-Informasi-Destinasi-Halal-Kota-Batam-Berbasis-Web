@@ -4,14 +4,18 @@ namespace App\Http\Controllers;
 
 use App\Models\Destinasi;
 use App\Models\User;
+use App\Http\Requests\StoreDestinasiRequest;
+use App\Http\Requests\UpdateDestinasiRequest;
+use App\Http\Requests\ApproveDestinasiRequest;
+use App\Http\Requests\RejectDestinasiRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
 class DestinasiController extends Controller
 {
+    // Get user's own destinasi (include all statuses for UMKM to track their submissions)
     public function index()
     {
-        // Get only user's own destinasi
         return response()->json(
             Destinasi::where('user_id', auth()->id())->get()
         );
@@ -24,12 +28,13 @@ class DestinasiController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
-        $totalDestinasi = Destinasi::count();
+        $totalDestinasi = Destinasi::approved()->count();
         $totalUmkm = User::where('role', 'umkm')->count();
-        $totalKategori = Destinasi::distinct('kategori')->count('kategori');
-        $totalLaporan = 0;
+        $totalKategori = Destinasi::approved()->distinct('kategori')->count('kategori');
+        $pendingApproval = Destinasi::pending()->count();
 
-        $recentDestinasi = Destinasi::orderByDesc('updated_at')
+        $recentDestinasi = Destinasi::approved()
+            ->orderByDesc('updated_at')
             ->take(4)
             ->get(['id', 'nama', 'kategori', 'updated_at'])
             ->map(function ($item) {
@@ -46,39 +51,32 @@ class DestinasiController extends Controller
             'total_destinasi' => $totalDestinasi,
             'total_umkm' => $totalUmkm,
             'total_kategori' => $totalKategori,
-            'total_laporan' => $totalLaporan,
+            'pending_approval' => $pendingApproval,
             'recent_destinasi' => $recentDestinasi,
         ]);
     }
 
-    // Public method to get all destinasi for public map
+    // Public method to get all APPROVED destinasi for public map
     public function getAllPublic()
     {
         return response()->json(
-            Destinasi::select('id', 'nama', 'kategori', 'alamat', 'latitude', 'longitude', 'telepon', 'email', 'deskripsi', 'foto')->get()
+            Destinasi::approved()
+                ->select('id', 'nama', 'kategori', 'alamat', 'latitude', 'longitude', 'telepon', 'email', 'deskripsi', 'foto')
+                ->get()
         );
     }
 
-    // Public method to get single destinasi
+    // Public method to get single APPROVED destinasi
     public function showPublic($id)
     {
-        $destinasi = Destinasi::findOrFail($id);
+        $destinasi = Destinasi::approved()->findOrFail($id);
         return response()->json($destinasi);
     }
 
-    public function store(Request $request)
+    // Store destinasi with status "pending" by default
+    public function store(StoreDestinasiRequest $request)
     {
-        $data = $request->validate([
-            'nama' => 'required',
-            'kategori' => 'required',
-            'alamat' => 'required',
-            'latitude' => 'required',
-            'longitude' => 'required',
-            'telepon' => 'required',
-            'email' => 'required',
-            'deskripsi' => 'required',
-            'foto' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:5120',
-        ]);
+        $data = $request->validated();
 
         if ($request->hasFile('foto')) {
             $path = $request->file('foto')->store('destinasi', 'public');
@@ -86,47 +84,148 @@ class DestinasiController extends Controller
         }
 
         $data['user_id'] = auth()->id();
+        $data['status'] = 'pending'; // Set status to pending automatically
 
         $destinasi = Destinasi::create($data);
 
-        return response()->json($destinasi);
+        return response()->json([
+            'message' => 'Pengajuan usaha berhasil dikirim. Menunggu persetujuan admin.',
+            'data' => $destinasi
+        ], 201);
     }
 
+    // Get single destinasi (for owner or admin)
     public function show(Destinasi $destinasi)
     {
+        // Check if user is owner or admin
+        if (auth()->user()->role !== 'admin' && $destinasi->user_id !== auth()->id()) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
         return response()->json($destinasi);
     }
 
-    public function update(Request $request, Destinasi $destinasi)
+    // Update destinasi
+    public function update(UpdateDestinasiRequest $request, Destinasi $destinasi)
     {
-        $data = $request->validate([
-            'nama' => 'sometimes|required',
-            'kategori' => 'sometimes|required',
-            'alamat' => 'sometimes|required',
-            'latitude' => 'sometimes|required',
-            'longitude' => 'sometimes|required',
-            'telepon' => 'sometimes|required',
-            'email' => 'sometimes|required',
-            'deskripsi' => 'sometimes|required',
-            'foto' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:5120',
-        ]);
+        // Check authorization
+        if (auth()->user()->role !== 'admin' && $destinasi->user_id !== auth()->id()) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        $data = $request->validated();
 
         if ($request->hasFile('foto')) {
             $path = $request->file('foto')->store('destinasi', 'public');
             $data['foto'] = $path;
         }
 
+        // If UMKM is updating, reset status to pending and clear rejection reason
+        if (auth()->user()->role !== 'admin') {
+            $data['status'] = 'pending';
+            $data['rejection_reason'] = null;
+        }
+
         $destinasi->update($data);
 
-        return response()->json($destinasi);
+        return response()->json([
+            'message' => 'Data berhasil diperbarui',
+            'data' => $destinasi
+        ]);
     }
 
+    // Delete destinasi
     public function destroy(Destinasi $destinasi)
     {
+        // Check authorization
+        if (auth()->user()->role !== 'admin' && $destinasi->user_id !== auth()->id()) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
         $destinasi->delete();
 
         return response()->json([
             'message' => 'Data berhasil dihapus'
         ]);
+    }
+
+    // ============ APPROVAL SYSTEM METHODS ============
+
+    // Admin: Get all destinations with status "approved"
+    public function getApproved(Request $request)
+    {
+        $this->authorizeAdmin();
+
+        $destinasi = Destinasi::approved()
+            ->with('user:id,name,email')
+            ->orderByDesc('created_at')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $destinasi,
+        ]);
+    }
+
+    // Admin: Get all pending destinasi
+    public function getPending(Request $request)
+    {
+        $this->authorizeAdmin();
+
+        $pending = Destinasi::pending()
+            ->with('user:id,name,email')
+            ->orderByDesc('created_at')
+            ->paginate($request->get('per_page', 15));
+
+        return response()->json($pending);
+    }
+
+
+    // Admin: Approve destinasi
+    public function approve(ApproveDestinasiRequest $request, Destinasi $destinasi)
+    {
+        if ($destinasi->status !== 'pending') {
+            return response()->json([
+                'message' => 'Data tidak dalam status pending'
+            ], 400);
+        }
+
+        $destinasi->update([
+            'status' => 'approved',
+            'rejection_reason' => null,
+        ]);
+
+        return response()->json([
+            'message' => 'Data destinasi berhasil disetujui dan akan ditampilkan untuk publik',
+            'data' => $destinasi
+        ]);
+    }
+
+    // Admin: Reject destinasi dengan alasan
+    public function reject(RejectDestinasiRequest $request, Destinasi $destinasi)
+    {
+        if ($destinasi->status !== 'pending') {
+            return response()->json([
+                'message' => 'Data tidak dalam status pending'
+            ], 400);
+        }
+
+        $destinasi->update([
+            'status' => 'rejected',
+            'rejection_reason' => $request->rejection_reason,
+        ]);
+
+        return response()->json([
+            'message' => 'Data destinasi berhasil ditolak',
+            'data' => $destinasi
+        ]);
+    }
+
+    // Helper method to check admin authorization
+    private function authorizeAdmin()
+    {
+        if (!auth()->check() || auth()->user()->role !== 'admin') {
+            abort(403, 'Only admin can access this resource');
+        }
     }
 }

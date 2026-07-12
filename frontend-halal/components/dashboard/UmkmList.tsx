@@ -15,7 +15,10 @@ export default function UmkmList() {
       },
     })
       .then((res) => res.json())
-      .then((data) => setBusinesses(data))
+      .then((data) => {
+        const approved = data.filter((b: any) => b.status === 'approved');
+        setBusinesses(approved);
+      })
       .catch((err) => console.error(err));
   }, []);
 
@@ -67,8 +70,10 @@ export default function UmkmList() {
           </div>
         ))
       ) : (
-        <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6 text-center text-slate-500">
-          Belum ada usaha yang ditambahkan
+        <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6 text-center text-slate-500 whitespace-pre-line">
+          Belum ada usaha yang aktif.
+          Pengajuan Anda masih menunggu persetujuan admin atau telah ditolak.
+          Silakan cek menu Kelola Data untuk melihat status pengajuan.
         </div>
       )}
     </div>

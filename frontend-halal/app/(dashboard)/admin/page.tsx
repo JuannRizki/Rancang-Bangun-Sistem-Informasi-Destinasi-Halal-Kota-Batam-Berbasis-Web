@@ -48,16 +48,22 @@ export default function AdminDashboardPage() {
       })
       .then((data) => {
         setStats([
-          { label: "Total Destinasi", value: data.total_destinasi.toString(), description: "Destinasi halal aktif" },
-          { label: "UMKM Terdaftar", value: data.total_umkm.toString(), description: "Pelaku usaha halal" },
-          { label: "Kategori", value: data.total_kategori.toString(), description: "Jenis destinasi" },
-          { label: "Laporan Masuk", value: data.total_laporan.toString(), description: "Permintaan validasi" },
+          { label: "Total Destinasi", value: (data?.total_destinasi ?? 0).toString(), description: "Destinasi halal aktif" },
+          { label: "UMKM Terdaftar", value: (data?.total_umkm ?? 0).toString(), description: "Pelaku usaha halal" },
+          { label: "Kategori", value: (data?.total_kategori ?? 0).toString(), description: "Jenis destinasi" },
+          { label: "Laporan Masuk", value: (data?.total_laporan ?? 0).toString(), description: "Permintaan validasi" },
         ]);
-        setRecentDestinasi(data.recent_destinasi || []);
+        setRecentDestinasi(data?.recent_destinasi || []);
       })
       .catch((err) => {
         console.error(err);
-        setError("Gagal memuat data admin.");
+        setStats([
+          { label: "Total Destinasi", value: "0", description: "Destinasi halal aktif" },
+          { label: "UMKM Terdaftar", value: "0", description: "Pelaku usaha halal" },
+          { label: "Kategori", value: "0", description: "Jenis destinasi" },
+          { label: "Laporan Masuk", value: "0", description: "Permintaan validasi" },
+        ]);
+        setRecentDestinasi([]);
       })
       .finally(() => {
         setLoading(false);
@@ -86,9 +92,7 @@ export default function AdminDashboardPage() {
                 <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Ringkasan Destinasi</p>
                 <h2 className="text-2xl font-semibold text-slate-950">Destinasi Terbaru</h2>
               </div>
-              <button className="inline-flex items-center rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700">
-                Tambah Destinasi
-              </button>
+
             </div>
             {loading ? (
               <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6 text-slate-700">Memuat daftar destinasi terbaru...</div>

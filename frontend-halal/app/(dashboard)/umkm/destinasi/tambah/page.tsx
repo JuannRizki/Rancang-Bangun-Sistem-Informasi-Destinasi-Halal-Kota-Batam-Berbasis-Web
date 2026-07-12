@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
 import MapPicker from "@/components/dashboard/MapPicker";
 
 export default function TambahDestinasiPage() {
@@ -20,32 +21,29 @@ export default function TambahDestinasiPage() {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState("");
 
-  // Template nama berdasarkan kategori
-  const kategoriTemplates: { [key: string]: string } = {
-    Kuliner: "Warung Kuliner ",
-    Hotel: "Hotel ",
-    Travel: "Travel Tours ",
-    Kerajinan: "Kerajinan ",
-    Lainnya: "Usaha ",
-  };
+  // Isi dropdown kategori dari database
+  const [kategoriList, setKategoriList] = useState<string[]>([]);
 
-  // Placeholder dinamis untuk input nama
-  const getPlaceholder = () => {
-    switch (form.kategori) {
-      case "Kuliner":
-        return "Contoh: Warung Makan Halal";
-      case "Hotel":
-        return "Contoh: Hotel Batam";
-      case "Travel":
-        return "Contoh: Travel Tours Halal";
-      case "Kerajinan":
-        return "Contoh: Kerajinan Tangan";
-      case "Lainnya":
-        return "Masukkan nama usaha";
-      default:
-        return "Contoh: Warung Makan Halal";
-    }
-  };
+  useEffect(() => {
+    const fetchKategori = async () => {
+      try {
+        const res = await fetch("http://127.0.0.1:8000/api/kategori", {
+          headers: {
+            Accept: "application/json",
+          },
+        });
+        if (!res.ok) throw new Error("Gagal memuat kategori");
+        const json = await res.json();
+        const names = (json?.data || []).map((k: any) => k.nama).filter(Boolean);
+        setKategoriList(names);
+      } catch (e) {
+        console.error(e);
+        setKategoriList([]);
+      }
+    };
+
+    fetchKategori();
+  }, []);
 
   const handleChange = (
     e: React.ChangeEvent<
@@ -56,20 +54,10 @@ export default function TambahDestinasiPage() {
   ) => {
     const { name, value } = e.target;
 
-    // Jika kategori berubah, set nama otomatis
-    if (name === "kategori") {
-      const template = kategoriTemplates[value] || "";
-      setForm({
-        ...form,
-        [name]: value,
-        nama: template,
-      });
-    } else {
-      setForm({
-        ...form,
-        [name]: value,
-      });
-    }
+    setForm({
+      ...form,
+      [name]: value,
+    });
   };
 
   const handleLocationSelect = (
@@ -133,7 +121,7 @@ export default function TambahDestinasiPage() {
       const data = await response.json();
 
       if (response.ok) {
-        alert("Berhasil tambah usaha");
+        alert("Pengajuan usaha berhasil dikirim. Data Anda sedang menunggu persetujuan Admin.");
         router.push("/umkm/destinasi");
       } else {
         alert(JSON.stringify(data));
@@ -182,11 +170,11 @@ export default function TambahDestinasiPage() {
                 className="w-full rounded-2xl border border-slate-300 p-4 focus:outline-none focus:ring-2 focus:ring-emerald-600"
               >
                 <option value="">Pilih kategori</option>
-                <option>Kuliner</option>
-                <option>Hotel</option>
-                <option>Travel</option>
-                <option>Kerajinan</option>
-                <option>Lainnya</option>
+                {kategoriList.map((k) => (
+                  <option key={k} value={k}>
+                    {k}
+                  </option>
+                ))}
               </select>
             </div>
           </div>

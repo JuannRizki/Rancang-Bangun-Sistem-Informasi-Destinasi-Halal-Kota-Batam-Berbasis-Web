@@ -158,7 +158,7 @@ export default function MapPicker({
   };
 
   useEffect(() => {
-    if (!searchQuery.trim()) {
+    if (!searchQuery.trim() || searchQuery.length < 2) {
       setSearchResults([]);
       setSearchError("");
       setSearchLoading(false);
@@ -166,11 +166,20 @@ export default function MapPicker({
     }
 
     if (searchDebounce.current) window.clearTimeout(searchDebounce.current);
-    searchDebounce.current = window.setTimeout(() => {
+    searchDebounce.current = window.setTimeout(async () => {
       setSearchLoading(true);
       setSearchError("");
 
-      if (googleMapsApiKey && googleAvailable && googleAutocompleteService.current) {
+      const allResults: MapSearchResult[] = [];
+      let hasError = false;
+
+      // Parallel search dari kedua provider
+      const googlePromise = new Promise<void>((resolve) => {
+        if (!googleMapsApiKey || !googleAvailable || !googleAutocompleteService.current) {
+          resolve();
+          return;
+        }
+
         googleAutocompleteService.current.getPlacePredictions(
           {
             input: searchQuery,
@@ -178,42 +187,36 @@ export default function MapPicker({
             types: ["geocode"],
           },
           (predictions: any[], status: string) => {
-            setSearchLoading(false);
-            if (status !== "OK" || !predictions) {
-              if (status !== "ZERO_RESULTS") {
-                setSearchError("Gagal mencari lokasi Google. Coba lagi.");
-              }
-              setSearchResults([]);
-              return;
+            if (status === "OK" && predictions && predictions.length > 0) {
+              allResults.push(
+                ...predictions.map((prediction) => ({
+                  provider: "google" as const,
+                  id: prediction.place_id,
+                  placeId: prediction.place_id,
+                  description: prediction.description,
+                  raw: prediction,
+                }))
+              );
             }
-
-            setSearchResults(
-              predictions.map((prediction) => ({
-                provider: "google",
-                id: prediction.place_id,
-                placeId: prediction.place_id,
-                description: prediction.description,
-                raw: prediction,
-              }))
-            );
+            resolve();
           }
         );
-      } else {
-        fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=8&countrycodes=id&q=${encodeURIComponent(
-            searchQuery
-          )}`
-        )
-          .then((resp) => {
-            if (!resp.ok) {
-              throw new Error(`HTTP ${resp.status}`);
-            }
-            return resp.json();
-          })
-          .then((data) => {
-            setSearchResults(
-              (data || []).map((item: any) => ({
-                provider: "nominatim",
+      });
+
+      const nominatimPromise = fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=10&countrycodes=id&q=${encodeURIComponent(
+          searchQuery
+        )}`
+      )
+        .then((resp) => {
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          return resp.json();
+        })
+        .then((data) => {
+          if (Array.isArray(data) && data.length > 0) {
+            allResults.push(
+              ...data.map((item: any) => ({
+                provider: "nominatim" as const,
                 id: item.place_id?.toString() || item.osm_id?.toString() || item.display_name,
                 description: item.display_name,
                 lat: parseFloat(item.lat),
@@ -222,17 +225,39 @@ export default function MapPicker({
                 raw: item,
               }))
             );
-          })
-          .catch((err) => {
-            console.error("Search error:", err);
-            setSearchError("Gagal mencari lokasi. Coba lagi.");
-            setSearchResults([]);
-          })
-          .finally(() => {
-            setSearchLoading(false);
-          });
+          }
+        })
+        .catch((err) => {
+          console.error("Nominatim search error:", err);
+          hasError = true;
+        });
+
+      try {
+        await Promise.all([googlePromise, nominatimPromise]);
+
+        // Remove duplicates berdasarkan description
+        const uniqueResults = Array.from(
+          new Map(allResults.map((item) => [item.description, item])).values()
+        );
+
+        setSearchResults(uniqueResults);
+
+        if (uniqueResults.length === 0) {
+          setSearchError("Tidak ditemukan. Coba kata kunci lain.");
+        } else if (hasError) {
+          setSearchError(""); // Suppress error jika ada hasil dari provider lain
+        }
+      } catch (err) {
+        console.error("Search error:", err);
+        if (allResults.length === 0) {
+          setSearchError("Gagal mencari lokasi. Coba lagi.");
+        } else {
+          setSearchResults(allResults);
+        }
+      } finally {
+        setSearchLoading(false);
       }
-    }, 250);
+    }, 300);
 
     return () => {
       if (searchDebounce.current) window.clearTimeout(searchDebounce.current);
@@ -240,51 +265,55 @@ export default function MapPicker({
   }, [searchQuery, googleAvailable]);
 
   const handleSelectSearchResult = async (item: MapSearchResult) => {
-    if (item.provider === "google" && item.placeId) {
-      if (!googlePlacesService.current) {
-        setSearchError("Google Places belum siap. Coba lagi.");
-        return;
-      }
+    setSearchLoading(true);
 
-      setSearchLoading(true);
-      googlePlacesService.current.getDetails(
-        { placeId: item.placeId, fields: ["geometry", "formatted_address", "name"] },
-        (place: any, status: string) => {
-          setSearchLoading(false);
-          if (status !== "OK" || !place?.geometry?.location) {
-            setSearchError("Gagal mengambil detail lokasi Google.");
-            return;
-          }
-
-          const latNum = place.geometry.location.lat();
-          const lonNum = place.geometry.location.lng();
-          const description = place.formatted_address || place.name || item.description;
-
-          if (map.current) {
-            map.current.setView([latNum, lonNum], 16);
-          }
-
-          if (marker.current) {
-            marker.current.setLatLng([latNum, lonNum]);
-          } else if (map.current) {
-            marker.current = L.marker([latNum, lonNum], { icon: defaultIcon })
-              .addTo(map.current)
-              .bindPopup("Lokasi Anda");
-          }
-
-          setLat(latNum);
-          setLng(lonNum);
-          setAddress(description);
+    try {
+      if (item.provider === "google" && item.placeId) {
+        if (!googlePlacesService.current) {
+          setSearchError("Google Places belum siap. Menggunakan data alternatif...");
+          // Fallback to reverse geocoding jika Google Places gagal
           setSearchResults([]);
           setSearchQuery("");
+          setSearchLoading(false);
+          return;
         }
-      );
-      return;
+
+        googlePlacesService.current.getDetails(
+          { placeId: item.placeId, fields: ["geometry", "formatted_address", "name"] },
+          (place: any, status: string) => {
+            if (status !== "OK" || !place?.geometry?.location) {
+              setSearchError("Gagal mengambil detail lokasi. Coba lagi.");
+              setSearchLoading(false);
+              return;
+            }
+
+            const latNum = place.geometry.location.lat();
+            const lonNum = place.geometry.location.lng();
+            const description = place.formatted_address || place.name || item.description;
+
+            updateMapWithLocation(latNum, lonNum, description);
+            setSearchLoading(false);
+          }
+        );
+      } else if (item.provider === "nominatim" && item.lat !== undefined && item.lon !== undefined) {
+        // Nominatim sudah punya koordinat
+        updateMapWithLocation(item.lat, item.lon, item.display_name || item.description);
+        setSearchLoading(false);
+      } else if (item.provider === "google" && item.raw?.geometry?.location) {
+        // Fallback jika data sudah tersedia di raw
+        const latNum = item.raw.geometry.location.lat();
+        const lonNum = item.raw.geometry.location.lng();
+        updateMapWithLocation(latNum, lonNum, item.description);
+        setSearchLoading(false);
+      }
+    } catch (error) {
+      console.error("Error selecting search result:", error);
+      setSearchError("Gagal memproses lokasi yang dipilih.");
+      setSearchLoading(false);
     }
+  };
 
-    const latNum = item.lat ?? 0;
-    const lonNum = item.lon ?? 0;
-
+  const updateMapWithLocation = (latNum: number, lonNum: number, description: string) => {
     if (map.current) {
       map.current.setView([latNum, lonNum], 16);
     }
@@ -299,9 +328,10 @@ export default function MapPicker({
 
     setLat(latNum);
     setLng(lonNum);
-    setAddress(item.display_name || item.description || "Lokasi dipilih");
+    setAddress(description);
     setSearchResults([]);
     setSearchQuery("");
+    setSearchError("");
   };
 
   const handleConfirmLocation = () => {
@@ -341,24 +371,33 @@ export default function MapPicker({
             />
 
             {searchLoading && (
-              <p className="text-sm text-slate-500">Mencari lokasi...</p>
+              <p className="text-sm text-slate-500">Mencari lokasi dari Google Maps & database lokal...</p>
             )}
             {!searchLoading && searchError && (
               <p className="text-sm text-red-500">{searchError}</p>
             )}
             {!searchLoading && !searchError && searchQuery.trim().length >= 2 && searchResults.length === 0 && (
-              <p className="text-sm text-slate-500">Tidak ditemukan. Coba kata kunci lain.</p>
+              <p className="text-sm text-slate-500">Tidak ditemukan. Coba kata kunci lain atau klik di peta.</p>
+            )}
+            {!searchLoading && searchResults.length > 0 && (
+              <p className="text-xs text-slate-400">Ditemukan {searchResults.length} hasil</p>
             )}
 
             {searchResults.length > 0 && (
-              <div className="max-h-48 overflow-auto rounded-lg border border-slate-200 bg-white">
+              <div className="max-h-56 overflow-auto rounded-lg border border-slate-200 bg-white shadow-sm">
                 {searchResults.map((item, idx) => (
                   <button
                     key={`${item.provider}-${item.id}-${idx}`}
                     onClick={() => handleSelectSearchResult(item)}
-                    className="w-full text-left px-3 py-2 hover:bg-slate-100 text-sm"
+                    className="w-full text-left px-4 py-3 hover:bg-emerald-50 border-b border-slate-100 last:border-b-0 transition flex items-start gap-2"
                   >
-                    {item.description}
+                    <span className="text-slate-400 mt-0.5">📍</span>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-slate-800">{item.description}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        {item.provider === "google" ? "Google Maps" : "Database Lokal"}
+                      </p>
+                    </div>
                   </button>
                 ))}
               </div>

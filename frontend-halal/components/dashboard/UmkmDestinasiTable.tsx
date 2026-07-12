@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
-function getPhotoUrl(foto?: string | null) {
-  if (!foto) return null;
+function getPhotoUrl(foto?: string | null): string {
+  if (!foto) return "";
   return foto.startsWith("http") ? foto : `http://127.0.0.1:8000/storage/${foto}`;
 }
 
 export default function UmkmDestinasiTable() {
-  const [businesses, setBusinesses] = useState([]);
+  const [businesses, setBusinesses] = useState<any[]>([]);
+  const router = useRouter();
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -22,6 +24,36 @@ export default function UmkmDestinasiTable() {
       .then((res) => res.json())
       .then((data) => setBusinesses(data));
   }, []);
+
+  const handleDelete = async (id: number) => {
+    const isConfirm = window.confirm("Apakah Anda yakin ingin menghapus usaha ini?");
+    if (!isConfirm) return;
+
+    // Optimistic UI: disable buttons if needed (keperluan UI tetap tidak diubah)
+
+
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/api/destinasi/${id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+      });
+
+      if (response.ok) {
+        setBusinesses(businesses.filter((b) => b.id !== id));
+      } else {
+        alert("Gagal menghapus usaha");
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Terjadi kesalahan jaringan");
+    }
+  };
 
   return (
     <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
@@ -48,7 +80,7 @@ export default function UmkmDestinasiTable() {
                 <td className="px-6 py-5">
                   {getPhotoUrl(business.foto) ? (
                     <img
-                      src={getPhotoUrl(business.foto)}
+                      src={getPhotoUrl(business.foto) || ""}
                       alt={business.nama}
                       className="h-16 w-16 rounded-2xl object-cover"
                     />
@@ -72,9 +104,26 @@ export default function UmkmDestinasiTable() {
                 </td>
 
                 <td className="px-6 py-5">
-                  <span className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                    Aktif
-                  </span>
+                  {business.status === 'pending' ? (
+                    <span className="inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 whitespace-nowrap">
+                      Menunggu Persetujuan
+                    </span>
+                  ) : business.status === 'rejected' ? (
+                    <div className="flex flex-col gap-1 items-start">
+                      <span className="inline-flex rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 whitespace-nowrap">
+                        Ditolak
+                      </span>
+                      {business.rejection_reason && (
+                        <span className="text-[11px] text-red-600 mt-1 max-w-[150px] leading-tight">
+                          Alasan: {business.rejection_reason}
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 whitespace-nowrap">
+                      Disetujui
+                    </span>
+                  )}
                 </td>
 
                 <td className="px-6 py-5">
@@ -83,11 +132,17 @@ export default function UmkmDestinasiTable() {
 
                 <td className="px-6 py-5">
                   <div className="flex gap-3">
-                    <button className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 py-2 text-slate-600 hover:border-emerald-300 hover:text-emerald-700">
+                    <button
+                      onClick={() => router.push(`/umkm/destinasi/${business.id}/edit`)}
+                      className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 py-2 text-slate-600 hover:border-emerald-300 hover:text-emerald-700"
+                    >
                       ✏️
                     </button>
 
-                    <button className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 py-2 text-red-600 hover:border-red-300 hover:bg-red-50">
+                    <button
+                      onClick={() => handleDelete(business.id)}
+                      className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 py-2 text-red-600 hover:border-red-300 hover:bg-red-50"
+                    >
                       🗑️
                     </button>
                   </div>

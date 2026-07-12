@@ -6,14 +6,7 @@ type TableRow = {
   tanggal: string;
 };
 
-const defaultRecentDestinasi: TableRow[] = [
-  { nama: "Kuliner Selasar", kategori: "Kuliner Halal", status: "Aktif", tanggal: "12 Apr 2026" },
-  { nama: "Hotel Batam View", kategori: "Akomodasi", status: "Verifikasi", tanggal: "10 Apr 2026" },
-  { nama: "Travel Umroh Amanah", kategori: "Jasa & Layanan", status: "Aktif", tanggal: "08 Apr 2026" },
-  { nama: "Rumah Makan Dapur Halal", kategori: "Kuliner Halal", status: "Aktif", tanggal: "05 Apr 2026" },
-];
-
-export default function Table({ items = defaultRecentDestinasi }: { items?: TableRow[] }) {
+export default function Table({ items = [] }: { items?: TableRow[] }) {
   return (
     <div className="overflow-hidden rounded-3xl border border-slate-200">
       <table className="min-w-full divide-y divide-slate-200 text-left text-sm text-slate-600">
@@ -26,14 +19,20 @@ export default function Table({ items = defaultRecentDestinasi }: { items?: Tabl
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-200 bg-white">
-          {items.map((item, index) => (
-            <tr key={item.id ?? `${item.nama}-${index}`} className="hover:bg-slate-50">
-              <td className="px-6 py-4 font-medium text-slate-950">{item.nama}</td>
-              <td className="px-6 py-4">{item.kategori}</td>
-              <td className="px-6 py-4">{item.status}</td>
-              <td className="px-6 py-4">{item.tanggal}</td>
+          {items.length === 0 ? (
+            <tr>
+              <td colSpan={4} className="px-6 py-12 text-center text-slate-500">Belum ada data.</td>
             </tr>
-          ))}
+          ) : (
+            items.map((item, index) => (
+              <tr key={item.id ?? `${item.nama}-${index}`} className="hover:bg-slate-50">
+                <td className="px-6 py-4 font-medium text-slate-950">{item.nama}</td>
+                <td className="px-6 py-4">{item.kategori}</td>
+                <td className="px-6 py-4">{item.status}</td>
+                <td className="px-6 py-4">{item.tanggal}</td>
+              </tr>
+            ))
+          )}
         </tbody>
       </table>
     </div>
