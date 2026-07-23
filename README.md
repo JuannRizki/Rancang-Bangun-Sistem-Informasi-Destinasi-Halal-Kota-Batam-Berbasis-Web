@@ -25,6 +25,12 @@ Laravel is accessible, powerful, and provides tools required for large, robust a
 
 - Run `php artisan storage:link` to expose uploaded images from `storage/app/public` to `public/storage`.
 
+- Use `lothus.py` to demo project testing and environment checks:
+  - `python lothus.py --env` to show PHP/composer versions
+  - `python lothus.py --unit` to run unit tests
+  - `python lothus.py --feature` to run feature tests
+  - `python lothus.py --demo` to run full demo flow
+
 - Database fix:
 
 If some rows have negative latitude but should be positive (Batam), run this SQL on your DB:
